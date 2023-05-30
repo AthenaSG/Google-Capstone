@@ -1,0 +1,83 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(geosphere)
+```
+
+# Data Preparatation
+```{r Preparatio, eval = FALSE}
+years = c('2022','2023')
+months = lapply(sprintf("%02d",c(1:12)),toString)
+
+df = data.frame()
+
+for (i in c(1:12)){
+  if (i < 5){
+    address = paste(years[2],months[i],'-divvy-tripdata','.csv', sep = '') 
+  }
+  else{
+    address = paste(years[1],months[i],'-divvy-tripdata','.csv', sep = '') 
+  }
+  
+  temp_df = read.csv(here('src',address))
+  df = bind_rows(temp_df,df)
+  
+  
+}
+```
+
+# Data Cleaning
+```{r Cleaning, eval = FALSE} 
+x <- subset(df, !complete.cases(df))
+
+x <- x %>%
+  mutate(ride_length = difftime(as_datetime(ended_at),as_datetime(started_at),units='hours')) %>%
+  summarize(average_duration = mean(ride_length))
+
+df <- subset(df, complete.cases(df))
+```
+##### As one can see , there are a few blanks in the datasheet, particularly in the end_station_name and ID. One can guess that these bycicles were left by the road side, with an average duration of 51 hours, which is very unlikely for one to rent for that amount of hours. 
+
+##### As this data is inaccurate, I have decided to remove it from the dataset entirely. Furthermore, it's 0.08% of the whole dataset, so removing it would not cause us to lose much datapoints for analysis.
+
+```{r Analysis, eval = FALSE}
+
+clean_df <- df
+
+clean_df <- clean_df %>%
+  mutate(ride_length = difftime(as_datetime(ended_at),as_datetime(started_at),units='mins'),
+         day_of_week = weekdays(as_datetime(started_at)),
+         distance = distHaversine(cbind(start_lng,start_lat), cbind(end_lng,end_lat), r = 6378137))
+
+clean_df_member <- clean_df %>%
+  group_by(member_casual) %>%
+  summarize(avg_ride_length = mean(ride_length))
+
+clean_df_member_day <- clean_df %>%
+  group_by(member_casual, day_of_week) %>%
+  summarize(avg_ride_length = mean(ride_length))
+
+clean_df_member_type <- clean_df %>%
+  group_by(member_casual, rideable_type) %>%
+  summarize(usage_type = n())
+
+clean_df_member_distance <- clean_df %>%
+  group_by(member_casual) %>%
+  summarize(avg_distance = mean(distance))
+
+  
+```
+##### Based on these results, we can see there's a clear preference for shorter rides for members (12 mins) vs casuals (21 mins). However, this is surface level. Based on the distance travelled, both members and casuals have similar average distances. This implies that members are much faster than casuals in terms of biking speed. 
+##### The members prefer both classic and electric bikes equally, against casuals which has a preference for electric bikes.
+
+##### The only major difference in usage is that casuals have a high preference for electric bikes, while members are indifferent towards both classic and electric bikes. 
+
+#### I would therefore recommend to have more electric bikes vs classic bikes, and have an ad campaign showing the strengths of the electric bikes vs other companies.
